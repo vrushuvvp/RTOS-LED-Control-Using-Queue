@@ -1,0 +1,72 @@
+#include <Arduino.h>
+
+// Pins
+#define LED_PIN     2
+#define BUTTON_PIN  4
+
+// Queue handle
+QueueHandle_t ledQueue;
+
+// Button Task
+void buttonTask(void *param) {
+
+  bool lastState = HIGH;
+
+  while (1) {
+
+    bool current = digitalRead(BUTTON_PIN);
+
+    if (lastState == HIGH && current == LOW) {
+
+      bool toggle = true;
+
+      // Send message to queue
+      xQueueSend(ledQueue, &toggle, portMAX_DELAY);
+    }
+
+    lastState = current;
+    vTaskDelay(50 / portTICK_PERIOD_MS);
+  }
+}
+
+// LED Task
+void ledTask(void *param) {
+
+  bool ledState = false;
+  bool msg;
+
+  while (1) {
+
+    // Wait for message
+    if (xQueueReceive(ledQueue, &msg, portMAX_DELAY)) {
+
+      ledState = !ledState;
+      digitalWrite(LED_PIN, ledState);
+    }
+  }
+}
+
+void setup() {
+
+  Serial.begin(115200);
+
+  pinMode(LED_PIN, OUTPUT);
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
+
+  // Create queue (size 5, type bool)
+  ledQueue = xQueueCreate(5, sizeof(bool));
+
+  if (ledQueue == NULL) {
+    Serial.println("Queue creation failed!");
+    while (1);
+  }
+
+  // Create tasks
+  xTaskCreate(buttonTask, "Button Task", 2048, NULL, 2, NULL);
+  xTaskCreate(ledTask, "LED Task", 2048, NULL, 1, NULL);
+
+  Serial.println("RTOS Queue Project Started");
+}
+
+void loop() {
+}
